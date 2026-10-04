@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ImgPrompt — 图像提示词构建器</title>
+<style>
+:root{
+  --bg:#0c0e13; --panel:#141821; --panel2:#1a2030; --border:#232a38;
+  --text:#e6e9f0; --muted:#8b93a7;
+  --c-subject:#e6e9f0; --c-style:#c084fc; --c-lighting:#fbbf24; --c-camera:#60a5fa;
+  --c-composition:#34d399; --c-mood:#f472b6; --c-quality:#9ca3af; --c-ar:#22d3ee;
+  --accent:#c084fc;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; line-height:1.6; min-height:100vh;}
+header{display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid var(--border); position:sticky; top:0; background:rgba(12,14,19,.92); backdrop-filter:blur(8px); z-index:10;}
+.brand{font-weight:800; letter-spacing:3px; font-size:18px;}
+.brand small{display:block; font-weight:400; letter-spacing:1px; font-size:11px; color:var(--muted);}
+.hactions{display:flex; gap:8px;}
+button{font-family:inherit; cursor:pointer;}
+.btn{background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 14px; font-size:13px; transition:border-color .15s, background .15s;}
+.btn:hover{border-color:var(--accent);}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:#0c0e13; font-weight:700;}
+.btn.primary:hover{filter:brightness(1.1);}
+.btn:disabled{opacity:.45; cursor:not-allowed;}
+.btn.small{padding:5px 10px; font-size:12px;}
+#settingsPanel{border-bottom:1px solid var(--border); background:var(--panel); padding:16px 24px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;}
+#settingsPanel[hidden]{display:none;}
+.field{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted);}
+.field input{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px 10px; font-size:13px; width:260px;}
+.field input:focus{outline:none; border-color:var(--accent);}
+.hint{font-size:11px; color:var(--muted); width:100%;}
+main{display:grid; grid-template-columns:1fr 420px; gap:16px; padding:20px 24px 60px; max-width:1400px; margin:0 auto; align-items:start;}
+.card{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px;}
+.card h2{font-size:13px; letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:8px;}
+.dot{width:9px; height:9px; border-radius:50%; display:inline-block;}
+.chips{display:flex; flex-wrap:wrap; gap:8px;}
+.chip{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:999px; padding:7px 14px; font-size:13px; transition:all .15s;}
+.chip:hover{border-color:var(--chip-c,#888);}
+.chip.on{border-color:var(--chip-c,#888); background:color-mix(in srgb, var(--chip-c,#888) 16%, transparent); box-shadow:0 0 0 1px var(--chip-c,#888) inset;}
+textarea{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:10px 12px; font-size:14px; width:100%; resize:vertical; font-family:inherit;}
+textarea:focus{outline:none; border-color:var(--accent);}
+.row{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px;}
+.status{font-size:12px; color:var(--muted);}
+.polished{margin-top:10px; font-size:13px; color:var(--muted); border-left:3px solid var(--accent); padding:6px 10px; background:var(--panel2); border-radius:0 8px 8px 0;}
+.polished b{color:var(--text); font-weight:600;}
+.seg{display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden;}
+.seg button{background:transparent; border:none; color:var(--muted); padding:7px 14px; font-size:12px;}
+.seg button.on{background:var(--panel2); color:var(--text); font-weight:700;}
+.preview{position:sticky; top:76px;}
+.preview .card{margin-bottom:14px;}
+#promptPreview{font-size:14px; line-height:2; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; min-height:120px; word-break:break-word;}
+#promptPreview .tok{border-radius:4px; padding:1px 3px;}
+#promptPreview .sep{color:#4b5563;}
+#negPreview{margin-top:10px; font-size:13px; background:var(--bg); border:1px dashed #7f1d1d; border-radius:8px; padding:10px 12px; color:#fca5a5;}
+#negPreview[hidden]{display:none;}
+#negPreview .neglabel{font-size:11px; letter-spacing:2px; color:#f87171; display:block; margin-bottom:4px;}
+.charcount{font-size:12px; color:var(--muted);}
+.exbtn{display:block; width:100%; text-align:left; margin-bottom:8px;}
+.exbtn:last-child{margin-bottom:0;}
+.exbtn .exname{font-weight:700; font-size:13px;}
+.exbtn .exdesc{font-size:12px; color:var(--muted);}
+.favitem{display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; background:var(--bg);}
+.favitem .fname{font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px;}
+.favitem .factions{display:flex; gap:6px;}
+.empty{font-size:12px; color:var(--muted); padding:6px 0;}
+footer{text-align:center; color:var(--muted); font-size:12px; padding:24px; border-top:1px solid var(--border);}
+@media (max-width:980px){ main{grid-template-columns:1fr;} .preview{position:static;} }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">IMGPROMPT<small data-i18n="tagline">图像提示词构建器</small></div>
+  <div class="hactions">
+    <button class="btn" id="langToggle">EN</button>
+    <button class="btn" id="settingsToggle" data-i18n="settings">设置</button>
+  </div>
+</header>
+
+<div id="settingsPanel" hidden>
+  <div class="field"><span data-i18n="apiBase">API 地址</span><input id="setBase" type="text" spellcheck="false"></div>
+  <div class="field"><span data-i18n="apiKey">API Key</span><input id="setKey" type="password" autocomplete="off" spellcheck="false"></div>
+  <div class="field"><span data-i18n="model">模型</span><input id="setModel" type="text" spellcheck="false"></div>
+  <button class="btn primary" id="setSave" data-i18n="save">保存</button>
+  <div class="hint" data-i18n="keyHint">Key 只保存在本机浏览器 localStorage，润色时仅发送到上方配置的 API 地址，不会发往别处。</div>
+</div>
+
+<main>
+  <div class="builder">
+    <section class="card">
+      <h2><span class="dot" style="background:var(--c-subject)"></span><span data-i18n="subject">主体</span></h2>
+      <textarea id="subjectInput" rows="2" data-i18n-ph="subjectPh" placeholder="描述你想要的画面主体，支持中文，例如：一只橘猫蹲在雨后的霓虹街道上"></textarea>
+      <div class="row">
+        <button class="btn primary" id="polishBtn" data-i18n="polish">AI 润色成英文</button>
+        <span class="status" id="polishStatus"></span>
+      </div>
+      <div class="polished" id="polishedBox" hidden><b>Polished:</b> <span id="polishedText"></span>
+        <div class="row"><button class="btn small" id="polishUse" data-i18n="usePolished">采用</button><button class="btn small" id="polishDiscard" data-i18n="discard">丢弃</button></div>
+      </div>
+    </section>
+    <div id="sections"></div>
+    <section class="card">
+      <h2><span class="dot" style="background:var(--c-ar)"></span><span data-i18n="aspectRatio">画幅比例</span></h2>
+      <div class="chips" id="arChips"></div>
+      <div class="row">
+        <span class="status" data-i18n="arFormat">后缀格式</span>
+        <div class="seg" id="arFormatSeg">
+          <button data-fmt="mj" class="on">--ar 16:9</button>
+          <button data-fmt="plain" data-i18n="plainFmt">aspect ratio 16:9</button>
+        </div>
+      </div>
+    </section>
+    <section class="card">
+      <h2><span class="dot" style="background:#f87171"></span><span data-i18n="negative">反向提示词</span></h2>
+      <div class="chips" id="negChips" style="margin-bottom:10px"></div>
+      <textarea id="negInput" rows="2" data-i18n-ph="negativePh" placeholder="low quality, watermark, deformed hands …"></textarea>
+    </section>
+    <section class="card">
+      <h2 data-i18n="examples">示例一键载入</h2>
+      <div id="exampleList"></div>
+    </section>
+    <section class="card">
+      <h2 data-i18n="favorites">我的收藏</h2>
+      <div class="row" style="margin-top:0; margin-bottom:10px">
+        <input id="favName" type="text" data-i18n-ph="favNamePh" placeholder="给当前组合起个名字" style="flex:1; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px 10px; font-size:13px;">
+        <button class="btn" id="favSave" data-i18n="favSave">收藏当前组合</button>
+      </div>
+      <div id="favList"></div>
+    </section>
+  </div>
+
+  <aside class="preview">
+    <div class="card">
+      <h2><span data-i18n="preview">实时预览</span><span class="charcount" id="charCount" style="margin-left:auto"></span></h2>
+      <div id="promptPreview"></div>
+      <div id="negPreview" hidden><span class="neglabel">NEGATIVE</span><span id="negText"></span></div>
+      <div class="row">
+        <button class="btn primary" id="copyBtn" data-i18n="copy">复制提示词</button>
+        <button class="btn" id="copyNegBtn" data-i18n="copyNeg">复制反向词</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="surpriseBtn" data-i18n="surprise">随机灵感</button>
+        <button class="btn" id="clearBtn" data-i18n="clear">清空</button>
+      </div>
+    </div>
+  </aside>
+</main>
+<footer>ImgPrompt · MIT · <span data-i18n="footer">单文件零依赖，Key 不离开你的浏览器</span></footer>
+
+<script>
+/* ============================================================
+   ImgPrompt — pure prompt-composition logic (no DOM access).
+   Kept DOM-free so it can be unit-tested in node.
+   ============================================================ */
+var SECTION_ORDER = ['style','lighting','camera','composition','mood','quality'];
+var SECTION_COLORS = {subject:'var(--c-subject)',style:'var(--c-style)',lighting:'var(--c-lighting)',camera:'var(--c-camera)',composition:'var(--c-composition)',mood:'var(--c-mood)',quality:'var(--c-quality)',ar:'var(--c-ar)'};
+
+var PRESETS = {
+style:[
+ {zh:'赛博朋克',en:'Cyberpunk',f:'cyberpunk style, neon-lit futuristic city'},
+ {zh:'水墨',en:'Ink wash',f:'traditional Chinese ink wash painting, shuimo'},
+ {zh:'电影感',en:'Cinematic',f:'cinematic film still, dramatic color grading'},
+ {zh:'像素风',en:'Pixel art',f:'pixel art, 16-bit retro game style'},
+ {zh:'油画',en:'Oil painting',f:'classical oil painting, visible brushstrokes'},
+ {zh:'极简',en:'Minimal',f:'minimalist composition, lots of negative space'},
+ {zh:'蒸汽波',en:'Vaporwave',f:'vaporwave aesthetic, retro 80s synthwave'},
+ {zh:'国风水彩',en:'Chinese watercolor',f:'Chinese watercolor painting, delicate washes'},
+ {zh:'浮世绘',en:'Ukiyo-e',f:'ukiyo-e woodblock print style'},
+ {zh:'吉卜力',en:'Ghibli',f:'Studio Ghibli anime style, hand-drawn'},
+ {zh:'黏土定格',en:'Claymation',f:'claymation stop-motion style'},
+ {zh:'低多边形',en:'Low poly',f:'low poly 3D render'},
+ {zh:'双重曝光',en:'Double exposure',f:'double exposure photography'},
+ {zh:'故障艺术',en:'Glitch art',f:'glitch art, digital distortion'}
+],
+lighting:[
+ {zh:'黄金时刻',en:'Golden hour',f:'golden hour lighting, warm glow'},
+ {zh:'伦勃朗光',en:'Rembrandt',f:'Rembrandt lighting, dramatic chiaroscuro'},
+ {zh:'霓虹',en:'Neon',f:'neon lighting, vibrant glow'},
+ {zh:'柔光箱',en:'Softbox',f:'softbox lighting, soft diffused light'},
+ {zh:'月光',en:'Moonlight',f:'moonlight, cool blue tones'},
+ {zh:'逆光',en:'Backlit',f:'backlit, rim light silhouette'},
+ {zh:'烛光',en:'Candlelight',f:'candlelight, warm flickering glow'},
+ {zh:'影棚光',en:'Studio',f:'studio lighting, clean professional look'}
+],
+camera:[
+ {zh:'85mm f/1.4',en:'85mm f/1.4',f:'shot on 85mm f/1.4, shallow depth of field'},
+ {zh:'广角',en:'Wide angle',f:'wide angle lens, expansive view'},
+ {zh:'航拍',en:'Aerial',f:'aerial drone photography, top-down view'},
+ {zh:'微距',en:'Macro',f:'macro photography, extreme close-up'},
+ {zh:'长焦压缩',en:'Telephoto',f:'telephoto compression, 200mm'},
+ {zh:'鱼眼',en:'Fisheye',f:'fisheye lens distortion'},
+ {zh:'移轴',en:'Tilt-shift',f:'tilt-shift miniature effect'}
+],
+composition:[
+ {zh:'三分法',en:'Rule of thirds',f:'rule of thirds composition'},
+ {zh:'对称',en:'Symmetry',f:'symmetrical composition'},
+ {zh:'引导线',en:'Leading lines',f:'leading lines composition'},
+ {zh:'框架构图',en:'Framing',f:'natural framing, foreground frame'},
+ {zh:'负空间',en:'Negative space',f:'generous negative space'},
+ {zh:'对角线',en:'Diagonal',f:'dynamic diagonal composition'}
+],
+mood:[
+ {zh:'宁静',en:'Serene',f:'serene, tranquil atmosphere'},
+ {zh:'史诗',en:'Epic',f:'epic, grandiose atmosphere'},
+ {zh:'忧郁',en:'Melancholic',f:'melancholic, wistful mood'},
+ {zh:'梦幻',en:'Dreamy',f:'dreamy, ethereal atmosphere'},
+ {zh:'紧张',en:'Tense',f:'tense, ominous atmosphere'},
+ {zh:'欢愉',en:'Joyful',f:'joyful, vibrant energy'}
+],
+quality:[
+ {zh:'杰作',en:'masterpiece',f:'masterpiece'},
+ {zh:'8K',en:'8k',f:'8k'},
+ {zh:'超精细',en:'ultra detailed',f:'ultra detailed'},
+ {zh:'锐利对焦',en:'sharp focus',f:'sharp focus'},
+ {zh:'专业摄影',en:'professional photo',f:'professional photography'},
+ {zh:'获奖作品',en:'award winning',f:'award winning'}
+]
+};
+
+var NEG_PRESETS = [
+ {zh:'低质量',en:'low quality',f:'low quality, blurry'},
+ {zh:'水印',en:'watermark',f:'watermark, text, logo'},
+ {zh:'手部畸形',en:'bad hands',f:'deformed hands, extra fingers'},
+ {zh:'人体结构差',en:'bad anatomy',f:'bad anatomy, distorted proportions'},
+ {zh:'过曝',en:'overexposed',f:'oversaturated, overexposed'},
+ {zh:'重复',en:'duplicate',f:'duplicate, cloned face'}
+];
+
+var AR_RATIOS = {'1:1':'1:1','16:9':'16:9','9:16':'9:16','3:2':'3:2','21:9':'21:9'};
+
+var EXAMPLES = [
+ {name:{zh:'霓虹雨夜猫',en:'Neon rain cat'},
+  desc:{zh:'赛博朋克 / 霓虹 / 忧郁',en:'cyberpunk / neon / melancholic'},
+  state:{subject:'一只橘猫蹲在雨后的霓虹街道上',polished:'',sel:{style:['cyberpunk style, neon-lit futuristic city'],lighting:['neon lighting, vibrant glow'],camera:['shot on 85mm f/1.4, shallow depth of field'],composition:['leading lines composition'],mood:['melancholic, wistful mood'],quality:['masterpiece','ultra detailed']},ar:'16:9',arFormat:'mj',negative:'low quality, blurry'}},
+ {name:{zh:'山水意境',en:'Mountain reverie'},
+  desc:{zh:'水墨 / 月光 / 宁静',en:'ink wash / moonlight / serene'},
+  state:{subject:'远山云雾中的孤舟',polished:'',sel:{style:['traditional Chinese ink wash painting, shuimo'],lighting:['moonlight, cool blue tones'],camera:['wide angle lens, expansive view'],composition:['generous negative space'],mood:['serene, tranquil atmosphere'],quality:['masterpiece']},ar:'3:2',arFormat:'plain',negative:'watermark, text, logo'}},
+ {name:{zh:'沙漠史诗',en:'Desert epic'},
+  desc:{zh:'电影感 / 黄金时刻 / 史诗',en:'cinematic / golden hour / epic'},
+  state:{subject:'沙漠中一支骆驼商队走向落日',polished:'',sel:{style:['cinematic film still, dramatic color grading'],lighting:['golden hour lighting, warm glow'],camera:['aerial drone photography, top-down view'],composition:['dynamic diagonal composition'],mood:['epic, grandiose atmosphere'],quality:['8k','sharp focus']},ar:'21:9',arFormat:'mj',negative:'deformed hands, extra fingers'}}
+];
+
+/* Compose the final prompt from a state object.
+   state = {subject, polished, sel:{section:[fragments]}, ar, arFormat, negative}
+   Returns {positive, negative, parts:[{sec,text}]}                */
+function composePrompt(s){
+  var parts=[];
+  var subj=String((s && s.polished) || (s && s.subject) || '').trim();
+  if(subj) parts.push({sec:'subject',text:subj});
+  var sel=(s && s.sel)||{};
+  for(var i=0;i<SECTION_ORDER.length;i++){
+    var sec=SECTION_ORDER[i], arr=sel[sec]||[];
+    for(var j=0;j<arr.length;j++){
+      var f=String(arr[j]||'').trim();
+      if(f) parts.push({sec:sec,text:f});
+    }
+  }
+  var positive=parts.map(function(p){return p.text;}).join(', ');
+  if(s && s.ar){
+    var suffix=(s.arFormat==='plain') ? ('aspect ratio '+s.ar) : ('--ar '+s.ar);
+    positive=positive ? (positive+', '+suffix) : suffix;
+  }
+  return {positive:positive, negative:String((s&&s.negative)||'').trim(), parts:parts};
+}
+
+/* Randomize a state. rng defaults to Math.random; inject a seeded
+   function for deterministic tests. Subject is left untouched. */
+function randomizeState(rng){
+  var r=rng||Math.random;
+  function pickN(arr,n){
+    var c=arr.slice(), out=[];
+    n=Math.min(n,c.length);
+    for(var i=0;i<n;i++) out.push(c.splice(Math.floor(r()*c.length),1)[0]);
+    return out;
+  }
+  var st={subject:'',polished:'',sel:{},ar:null,arFormat:'mj',negative:''};
+  for(var k=0;k<SECTION_ORDER.length;k++){
+    var sec=SECTION_ORDER[k];
+    if(sec==='style') st.sel[sec]=pickN(PRESETS[sec],1).map(function(p){return p.f;});
+    else if(sec==='quality') st.sel[sec]=pickN(PRESETS[sec],2+Math.floor(r()*2)).map(function(p){return p.f;});
+    else st.sel[sec]=(r()<0.75)?pickN(PRESETS[sec],1).map(function(p){return p.f;}):[];
+  }
+  var ars=Object.keys(AR_RATIOS);
+  st.ar=ars[Math.floor(r()*ars.length)];
+  st.arFormat=(r()<0.5)?'mj':'plain';
+  return st;
+}
+
+function blankState(){
+  var sel={};
+  for(var i=0;i<SECTION_ORDER.length;i++) sel[SECTION_ORDER[i]]=[];
+  return {subject:'',polished:'',sel:sel,ar:null,arFormat:'mj',negative:''};
+}
+
+function cloneState(s){ return JSON.parse(JSON.stringify(s)); }
+
+if(typeof module!=='undefined' && module.exports){
+  module.exports={composePrompt:composePrompt, randomizeState:randomizeState,
+    blankState:blankState, cloneState:cloneState,
+    PRESETS:PRESETS, NEG_PRESETS:NEG_PRESETS, AR_RATIOS:AR_RATIOS, EXAMPLES:EXAMPLES,
+    SECTION_ORDER:SECTION_ORDER};
+}
+</script>
+<script>
+/* ============================================================
+   ImgPrompt — UI wiring (browser only). Pure logic above is
+   shared and unit-tested in node.
+   ============================================================ */
+(function(){
+if(typeof document==='undefined') return;
+
+/* ---------- i18n ---------- */
+var I18N={
+zh:{tagline:'图像提示词构建器',settings:'设置',apiBase:'API 地址',apiKey:'API Key',model:'模型',save:'保存',
+keyHint:'Key 只保存在本机浏览器 localStorage，润色时仅发送到上方配置的 API 地址，不会发往别处。',
+subject:'主体',subjectPh:'描述你想要的画面主体，支持中文，例如：一只橘猫蹲在雨后的霓虹街道上',
+polish:'AI 润色成英文',polishNeedKey:'请先在设置里填写 API Key',polishEmpty:'请先填写主体描述',
+polishWorking:'润色中…',polishDone:'润色完成，可采用或丢弃',polishFail:'润色失败',
+usePolished:'采用',discard:'丢弃',
+secStyle:'风格',secLighting:'灯光',secCamera:'镜头',secComposition:'构图',secMood:'氛围',secQuality:'画质',
+aspectRatio:'画幅比例',arFormat:'后缀格式',plainFmt:'aspect ratio 16:9',
+negative:'反向提示词',negativePh:'low quality, watermark, deformed hands …',
+examples:'示例一键载入',favorites:'我的收藏',favNamePh:'给当前组合起个名字',favSave:'收藏当前组合',
+noFav:'还没有收藏',preview:'实时预览',copy:'复制提示词',copyNeg:'复制反向词',copied:'已复制',
+copyFail:'复制失败',surprise:'随机灵感',clear:'清空',chars:'字符',load:'载入',del:'删除',
+favSaved:'已收藏',setSaved:'已保存',footer:'单文件零依赖，Key 不离开你的浏览器',negLabel:'NEGATIVE'},
+en:{tagline:'image prompt builder',settings:'Settings',apiBase:'API base URL',apiKey:'API key',model:'Model',save:'Save',
+keyHint:'Key is stored only in this browser\u2019s localStorage and is sent solely to the API base URL above, nowhere else.',
+subject:'Subject',subjectPh:'Describe your subject, Chinese OK, e.g. an orange cat on a neon street after rain',
+polish:'Polish to English',polishNeedKey:'Set your API key in Settings first',polishEmpty:'Enter a subject first',
+polishWorking:'Polishing…',polishDone:'Done — adopt or discard',polishFail:'Polish failed',
+usePolished:'Adopt',discard:'Discard',
+secStyle:'Style',secLighting:'Lighting',secCamera:'Camera',secComposition:'Composition',secMood:'Mood',secQuality:'Quality',
+aspectRatio:'Aspect ratio',arFormat:'Suffix format',plainFmt:'aspect ratio 16:9',
+negative:'Negative prompt',negativePh:'low quality, watermark, deformed hands …',
+examples:'One-click examples',favorites:'My favorites',favNamePh:'Name this combo',favSave:'Save combo',
+noFav:'No favorites yet',preview:'Live preview',copy:'Copy prompt',copyNeg:'Copy negative',copied:'Copied',
+copyFail:'Copy failed',surprise:'Surprise me',clear:'Clear',chars:'chars',load:'Load',del:'Delete',
+favSaved:'Saved',setSaved:'Saved',footer:'Single file, zero deps — your key never leaves the browser',negLabel:'NEGATIVE'}
+};
+var lang=localStorage.getItem('imgprompt_lang')||'zh';
+function t(k){return (I18N[lang]&&I18N[lang][k])||I18N.zh[k]||k;}
+function secTitle(sec){return t('sec'+sec.charAt(0).toUpperCase()+sec.slice(1));}
+function secColorVar(sec){return {style:'--c-style',lighting:'--c-lighting',camera:'--c-camera',composition:'--c-composition',mood:'--c-mood',quality:'--c-quality'}[sec];}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+/* ---------- state ---------- */
+var state=blankState();
+try{
+  var saved=localStorage.getItem('imgprompt_state');
+  if(saved){var ps=JSON.parse(saved); if(ps&&ps.sel) state=ps;}
+}catch(e){}
+function persist(){try{localStorage.setItem('imgprompt_state',JSON.stringify(state));}catch(e){}}
+
+function loadSettings(){
+  var d={base:'https://api.openai.com/v1',key:'',model:'gpt-4o-mini'};
+  try{var s=JSON.parse(localStorage.getItem('imgprompt_settings')||'null'); if(s) d=Object.assign(d,s);}catch(e){}
+  return d;
+}
+
+/* ---------- rendering ---------- */
+function renderSections(){
+  var host=document.getElementById('sections'); host.innerHTML='';
+  SECTION_ORDER.forEach(function(sec){
+    var card=document.createElement('section'); card.className='card';
+    var h=document.createElement('h2');
+    h.innerHTML='<span class="dot" style="background:var('+secColorVar(sec)+')"></span><span>'+esc(secTitle(sec))+'</span>';
+    card.appendChild(h);
+    var chips=document.createElement('div'); chips.className='chips';
+    PRESETS[sec].forEach(function(p){
+      var b=document.createElement('button');
+      b.className='chip'+(state.sel[sec].indexOf(p.f)>=0?' on':'');
+      b.style.setProperty('--chip-c','var('+secColorVar(sec)+')');
+      b.textContent=p[lang]||p.zh; b.title=p.f;
+      b.onclick=function(){
+        var i=state.sel[sec].indexOf(p.f);
+        if(i>=0) state.sel[sec].splice(i,1); else state.sel[sec].push(p.f);
+        b.classList.toggle('on'); persist(); renderPreview();
+      };
+      chips.appendChild(b);
+    });
+    card.appendChild(chips); host.appendChild(card);
+  });
+}
+
+function renderArChips(){
+  var host=document.getElementById('arChips'); host.innerHTML='';
+  Object.keys(AR_RATIOS).forEach(function(ar){
+    var b=document.createElement('button');
+    b.className='chip'+(state.ar===ar?' on':'');
+    b.style.setProperty('--chip-c','var(--c-ar)');
+    b.textContent=ar;
+    b.onclick=function(){ state.ar=(state.ar===ar)?null:ar; persist(); renderArChips(); renderPreview(); };
+    host.appendChild(b);
+  });
+  var seg=document.getElementById('arFormatSeg');
+  Array.prototype.forEach.call(seg.querySelectorAll('button'),function(b){
+    b.classList.toggle('on', b.getAttribute('data-fmt')===state.arFormat);
+    b.onclick=function(){ state.arFormat=b.getAttribute('data-fmt'); persist(); renderArChips(); renderPreview(); };
+  });
+}
+
+function renderNegChips(){
+  var host=document.getElementById('negChips'); host.innerHTML='';
+  var cur=document.getElementById('negInput').value;
+  NEG_PRESETS.forEach(function(p){
+    var b=document.createElement('button');
+    var has=cur.indexOf(p.f)>=0;
+    b.className='chip'+(has?' on':'');
+    b.style.setProperty('--chip-c','#f87171');
+    b.textContent=p[lang]||p.zh; b.title=p.f;
+    b.onclick=function(){
+      var ta=document.getElementById('negInput');
+      var parts=ta.value.split(',').map(function(x){return x.trim();}).filter(Boolean);
+      var i=parts.indexOf(p.f);
+      if(i>=0) parts.splice(i,1); else parts.push(p.f);
+      ta.value=parts.join(', ');
+      state.negative=ta.value; persist(); renderNegChips(); renderPreview();
+    };
+    host.appendChild(b);
+  });
+}
+
+function renderExamples(){
+  var host=document.getElementById('exampleList'); host.innerHTML='';
+  EXAMPLES.forEach(function(ex){
+    var b=document.createElement('button'); b.className='btn exbtn';
+    b.innerHTML='<div class="exname">'+esc(ex.name[lang]||ex.name.zh)+'</div><div class="exdesc">'+esc(ex.desc[lang]||ex.desc.zh)+'</div>';
+    b.onclick=function(){ state=cloneState(ex.state); syncInputs(); renderAll(); };
+    host.appendChild(b);
+  });
+}
+
+function getFavs(){try{return JSON.parse(localStorage.getItem('imgprompt_favs')||'[]');}catch(e){return [];}}
+function setFavs(f){try{localStorage.setItem('imgprompt_favs',JSON.stringify(f));}catch(e){}}
+
+function renderFavs(){
+  var host=document.getElementById('favList'); host.innerHTML='';
+  var favs=getFavs();
+  if(!favs.length){host.innerHTML='<div class="empty">'+esc(t('noFav'))+'</div>';return;}
+  favs.forEach(function(f,idx){
+    var d=document.createElement('div'); d.className='favitem';
+    d.innerHTML='<span class="fname">'+esc(f.name)+'</span>';
+    var acts=document.createElement('span'); acts.className='factions';
+    var lb=document.createElement('button'); lb.className='btn small'; lb.textContent=t('load');
+    lb.onclick=function(){state=cloneState(f.state); syncInputs(); renderAll();};
+    var db=document.createElement('button'); db.className='btn small'; db.textContent=t('del');
+    db.onclick=function(){var fs=getFavs(); fs.splice(idx,1); setFavs(fs); renderFavs();};
+    acts.appendChild(lb); acts.appendChild(db); d.appendChild(acts); host.appendChild(d);
+  });
+}
+
+function colorFor(sec){
+  var m={subject:'var(--c-subject)',style:'var(--c-style)',lighting:'var(--c-lighting)',camera:'--c-camera',composition:'var(--c-composition)',mood:'var(--c-mood)',quality:'var(--c-quality)'};
+  var v=m[sec]||'var(--c-subject)';
+  return v.charAt(0)==='-'?('var('+v+')'):v;
+}
+
+function renderPreview(){
+  var c=composePrompt(state);
+  var el=document.getElementById('promptPreview');
+  if(!c.positive){el.innerHTML='<span style="color:var(--muted)">…</span>';}
+  else{
+    var html='';
+    c.parts.forEach(function(p,i){
+      if(i>0) html+='<span class="sep">, </span>';
+      var col=colorFor(p.sec);
+      html+='<span class="tok" style="background:color-mix(in srgb, '+col+' 16%, transparent);border:1px solid '+col+'66">'+esc(p.text)+'</span>';
+    });
+    if(state.ar){
+      var suf=(state.arFormat==='plain')?('aspect ratio '+state.ar):('--ar '+state.ar);
+      html+='<span class="sep">, </span><span class="tok" style="background:color-mix(in srgb, var(--c-ar) 16%, transparent);border:1px solid var(--c-ar)66">'+esc(suf)+'</span>';
+    }
+    el.innerHTML=html;
+  }
+  document.getElementById('charCount').textContent=c.positive.length+' '+t('chars');
+  var neg=c.negative, nb=document.getElementById('negPreview');
+  nb.hidden=!neg; document.getElementById('negText').textContent=neg;
+}
+
+function syncInputs(){
+  document.getElementById('subjectInput').value=state.subject||'';
+  document.getElementById('negInput').value=state.negative||'';
+  document.getElementById('polishedBox').hidden=true;
+}
+function renderAll(){renderSections();renderArChips();renderNegChips();renderExamples();renderFavs();renderPreview();}
+
+function applyI18n(){
+  document.documentElement.lang=(lang==='zh')?'zh-CN':'en';
+  Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'),function(el){
+    el.textContent=t(el.getAttribute('data-i18n'));
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-ph]'),function(el){
+    el.setAttribute('placeholder',t(el.getAttribute('data-i18n-ph')));
+  });
+  document.getElementById('langToggle').textContent=(lang==='zh')?'EN':'中文';
+}
+
+/* ---------- actions ---------- */
+function flashBtn(btn,msg){
+  var old=btn.textContent; btn.textContent=msg;
+  setTimeout(function(){btn.textContent=old;},1200);
+}
+function copyText(str,btn){
+  function ok(){flashBtn(btn,t('copied'));}
+  function fail(){flashBtn(btn,t('copyFail'));}
+  function legacy(){
+    var ta=document.createElement('textarea'); ta.value=str;
+    ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{document.execCommand('copy');ok();}catch(e){fail();}
+    document.body.removeChild(ta);
+  }
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(str).then(ok,legacy);
+  }else legacy();
+}
+
+function setStatus(msg){document.getElementById('polishStatus').textContent=msg;}
+
+function wireEvents(){
+  document.getElementById('langToggle').onclick=function(){
+    lang=(lang==='zh')?'en':'zh';
+    try{localStorage.setItem('imgprompt_lang',lang);}catch(e){}
+    applyI18n(); renderAll();
+  };
+  var panel=document.getElementById('settingsPanel');
+  document.getElementById('settingsToggle').onclick=function(){panel.hidden=!panel.hidden;};
+  var s0=loadSettings();
+  document.getElementById('setBase').value=s0.base;
+  document.getElementById('setKey').value=s0.key;
+  document.getElementById('setModel').value=s0.model;
+  document.getElementById('setSave').onclick=function(){
+    try{localStorage.setItem('imgprompt_settings',JSON.stringify({
+      base:document.getElementById('setBase').value.trim()||'https://api.openai.com/v1',
+      key:document.getElementById('setKey').value,
+      model:document.getElementById('setModel').value.trim()||'gpt-4o-mini'}));}catch(e){}
+    flashBtn(document.getElementById('setSave'),t('setSaved'));
+  };
+
+  document.getElementById('subjectInput').addEventListener('input',function(e){
+    state.subject=e.target.value; persist(); renderPreview();
+  });
+  document.getElementById('negInput').addEventListener('input',function(e){
+    state.negative=e.target.value; persist(); renderNegChips(); renderPreview();
+  });
+
+  var polishBtn=document.getElementById('polishBtn');
+  polishBtn.onclick=function(){
+    var cfg=loadSettings();
+    if(!cfg.key){setStatus(t('polishNeedKey'));return;}
+    var subj=document.getElementById('subjectInput').value.trim();
+    if(!subj){setStatus(t('polishEmpty'));return;}
+    setStatus(t('polishWorking')); polishBtn.disabled=true;
+    fetch(cfg.base.replace(/\/+$/,'')+'/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
+      body:JSON.stringify({model:cfg.model,
+        messages:[
+          {role:'system',content:'You expand a short image subject (it may be in Chinese) into ONE detailed English image-prompt fragment, 30-60 words, visual details only. Reply with the fragment only, no quotes, no explanations.'},
+          {role:'user',content:subj}],
+        temperature:0.7,max_tokens:160})
+    }).then(function(r){if(!r.ok) throw new Error('HTTP '+r.status); return r.json();})
+      .then(function(d){
+        var txt=(d&&d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content||'').trim();
+        if(!txt) throw new Error('empty response');
+        document.getElementById('polishedText').textContent=txt;
+        document.getElementById('polishedBox').hidden=false;
+        setStatus(t('polishDone'));
+      })
+      .catch(function(e){setStatus(t('polishFail')+': '+e.message);})
+      .then(function(){polishBtn.disabled=false;});
+  };
+  document.getElementById('polishUse').onclick=function(){
+    state.polished=document.getElementById('polishedText').textContent;
+    document.getElementById('polishedBox').hidden=true; persist(); renderPreview();
+  };
+  document.getElementById('polishDiscard').onclick=function(){
+    document.getElementById('polishedBox').hidden=true;
+  };
+
+  document.getElementById('copyBtn').onclick=function(){
+    copyText(composePrompt(state).positive,document.getElementById('copyBtn'));
+  };
+  document.getElementById('copyNegBtn').onclick=function(){
+    copyText(composePrompt(state).negative,document.getElementById('copyNegBtn'));
+  };
+  document.getElementById('surpriseBtn').onclick=function(){
+    var subj=state.subject, pol=state.polished;
+    state=Object.assign(randomizeState(),{subject:subj,polished:pol});
+    persist(); renderArChips(); renderSections(); renderPreview();
+  };
+  document.getElementById('clearBtn').onclick=function(){
+    state=blankState(); syncInputs(); persist(); renderAll();
+  };
+  document.getElementById('favSave').onclick=function(){
+    var favs=getFavs();
+    var name=document.getElementById('favName').value.trim()||('Combo '+(favs.length+1));
+    favs.push({name:name,state:cloneState(state),ts:Date.now()});
+    setFavs(favs); document.getElementById('favName').value='';
+    renderFavs(); flashBtn(document.getElementById('favSave'),t('favSaved'));
+  };
+}
+
+/* ---------- init ---------- */
+applyI18n(); wireEvents(); syncInputs(); renderAll();
+})();
+</script>
+</body>
+</html>
